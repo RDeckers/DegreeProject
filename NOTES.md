@@ -3,6 +3,8 @@
 * Write, of course
 * Decide what still needs to be done in terms of code/benchmarks.
 
+
+
 * Abstract
 
 * Introduction to CERN
@@ -22,9 +24,9 @@
     * vectorization possibilities, threading
   * Note on storage format (compression, cite different compressions here too)
 
-Acknowlegments
-Glossary (ESDs, AOD, Entity, Task, CTF, ALICE, CERN, O2, etc.)
-References (bibtex)
+* Acknowlegments
+* Glossary (ESDs, AOD, Entity, Task, CTF, ALICE, CERN, O2, etc.)
+* References (bibtex)
 
 Include nice Tkiz graphs for all explanations of arrays and such.
 
