@@ -1,0 +1,20 @@
+\documentclass{report}
+\usepackage{standalone}
+\usepackage[toc,page]{appendix}
+\usepackage{hyperref}
+% your preamble here
+\begin{document}
+\tableofcontents
+\newpage
+% ...
+\input{chapters/introduction}\newpage
+\input{chapters/the_AOD_format}\newpage
+\input{chapters/existing_implementation}\newpage
+\input{chapters/new_design}\newpage
+
+\begin{appendices}
+\input{chapters/acknowledgements}\newpage
+\input{chapters/Glossary}
+\end{appendices}
+% ...
+\end{document}
