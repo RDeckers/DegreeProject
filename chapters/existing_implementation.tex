@@ -1,9 +1,27 @@
-\documentclass{report}
+\documentclass[a4paper]{report}
 \begin{document}
 
 \chapter{Strengths and Flaws of the Existing implementation}
-General overview here, ROOT objects, AoS, etc. Note the dfferences in run 3 and 2.
+The current implementation of AOD files is done using {\em ROOT}(CITE) objects. ROOT is a general-purpose (High-Energy) Physics framework extensively used throughout
+all of CERNs experiments. Among its features is the ability to define classes as ROOT objects, granting them
+features such as runtime-introspection, and store collections of ROOT objects in a general-purpose custom data format called a ROOT tree (TTree).
+ The existing AOD format is defined as such a TTree and input and output operations are handled by ROOT.
+ 
 \section{Strengths}
+
 \section{Weaknesses}
+Unfortunately, this approach does come with some downsides. Storing data in a TTree requires that the data is a ROOT object. In order to define a type as a ROOT object in c++
+one has to inherit from the class {\em TObject}, and this causes problems. If a class derives from {\em TObject} it will inherit virtual functions, and in doing so it will no be a
+Plain-Old-Data-type (POD-type), that is, it will have a virtual pointer meaning it can't be shared or copied between different nodes without doing some form of serialization to get rid of and
+restore said pointer. In general, ROOT Trees where never designed to be shared across multiple nodes in a distributed fashion and once loaded from disk does not shy away from using
+pointers internally.
+
+Another downside is that one is dependent on the features and optimizations found in the generic ROOT Tree.  for example ROOT trees are optimized to handle files which are larger
+than the available memory of a system but there is little control over this feature preventing further optimizations. dependency By building on top of ROOT Trees it also introduces a
+where we are
+
+finally, using the ROOT approach a collection of structs is defined and stored in a array-of-structs like fashion. As we will show later, this makes it hard to do efficient pruning
+as different struct members will be interleaved together.
+
 (not flat for one, bottlenecked, full of references, dead data from deep inheritance)
 \end{document}

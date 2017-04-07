@@ -1,19 +1,31 @@
-\documentclass{report}
+\documentclass[a4paper]{report}
 \begin{document}
 
 \chapter{The AOD format}
-General overview here, comparison between the different data types (Raw, CTF, ESDs, AOD) produced by the experiment and why they are needed.
-\section{AOD Production}
-How AODs are generated in the pipeline. Run3.
+The AOD (Analysis Object Data) format is intended to be the main file format to be used for the analysis of data produced by the experiment; both physical data and simulated Monte-Carlo data.
+They are the final output format for both methods of data taking, they are constructed from ESD (Event Summary Data) files containing cleaned cluster-data and reconstructed tracks and vertices.
+It is estimated that a yearly-median of 21 PB  worth of AODs will be stored between 2020 and 2027 (excl. a 3 year shutdown between 2022 and 2025) making efficient usage and storage very important.
+AODs will be stored at dedicated facilities for subsequent analysis.
 \section{Analysis}
 Generated AODs will be stored and processed in dedicated {\em Analysis Facilities} or on local machines. These Analysis Facilities are specialized datacenters, part of the ALICE
-Grid (Note: Grid or GRID?). Physicists can submit different tasks to the grid to run against a large (or small) set of data. The Grid software automatically handles the
- scheduling of tasks and the IO of the AODs. Tasks may be split up over multiple machines or even multiple Grid {\em sites} at once, the smallest level of granularity the scheduler can handle
- is a single AOD file. Multiple tasks, by possibly multiple users, are scheduled together in a so-called {\em Analysis Train}, this groups (sub-)tasks together based
- on the accessed files thereby reducing file IO and data movement.
-\par Each sub-task runs as it's own separate process. The scheduling of sub-tasks is fully automated and transparent to the task.
- Tasks can communicate between each other and other actors using a messaging system build on top of FairMQ(CITE) (which is in build on top of ZeroMQ and nanomsg(TODO: check, CITE)). This can be leveraged
- to share a single in-memory AOD between several consumers.
+Computing Grid. Physicists can submit different tasks to the Grid to run against a large (or small) set of data.  The Grid software automatically handles the
+ scheduling of tasks and the IO of the AODs.
+  Tasks may be split up over multiple machines or even multiple Grid {\em sites} at once, the smallest level of granularity the
+ scheduler can handle is a single AOD file.
+
+\par There are currently two ways of submitting jobs to the Grid. One can submit a single analysis task as a c++ source file, specifying the input files at run-time, or alternatively
+one can submit a task as part of a so-called Analysis Train. In order to do so, the analysis task has to be checked in to the central source-code repository. It is
+then possible to tweak the parameters and select the data of interest from a web-interface. Several tasks submitted in such a fashion (called wagons) will be gathered together by the
+central software reducing the required movement of data. Using analysis-trains has proven to be a much more effective utilization of resources and single-tasks are therefore
+being phased out in favor of analysis-trains.
+
+ \par Each task (or wagon as they are also called) runs as it's own separate process.
+ Tasks can communicate between each other and other actors using a messaging system build on top of FairMQ(CITE) (which is in build on top of ZeroMQ(CITE) and nanomsg(CITE)).
+ This messaging system can be used to share a single AOD between several tasks using shared memory or fetching data from the nearest location. for example,
+ the data can be located starting from shared memory, then looking at a different NUMA node, then looking at other connected nodes in memory or on disk, etc.,
+ all the way to tape-storage. The exact implementation of this mechanism and topology is independent of the AOD design and Analysis Framework save for two restrictions:
+ the AOD design has to interact (efficiently) with the fairMQ message-passing framework and the framework
+ has to let the messaging system be in charge of memory-allocation in order to be able to use shared memory.
 
 \section{Requirements}
 Before the start of the project a list of all necessary features was compiled, these included:
@@ -30,25 +42,32 @@ Before the start of the project a list of all necessary features was compiled, t
   tracks which fit this criteria.
   (TODO: write psuedo-code for these to use as an example, i.e. $if(charge <= 0)\{ continue; \}$ )
   \item {\bf Growing:} The ability to easily extend an AOD with additional data, structures or components. For example, one might like to extend the track structure with a
-  new field to cache the result of a long and complex computation, call it {\em 'HiggsBosonCandidate'}, that would be growing the track structure. Another option would be the
-  adding of a whole new struct to an existing AOD, for example one might have a set of simulated (Monte-Carlo generated) collisions and wish to extend the AOD file to include
-  simulated tracks. (TODO: write better good)
-
+  new field to cache the result of a long and complex computation, call our hypothetical field {\em 'bool IsHiggsBosonCandidate'}, that would be an example of growing the track structure.
+   Another option would be the adding of a whole new struct to an existing AOD, for example one might have a set of simulated (Monte-Carlo generated) collisions and wish to
+   extend the AOD file to include the tracks created by this simulation (note that the Monte Carlo generator produces particles which do not interact with the detector so one simulates this interaction
+   starting from the generated particles to create a simulation of raw detector data, after which the normal reconstruction algorithms can be run to create normal AOD data).
 \end{itemize}
 This list was later extended to include:
 \begin{itemize}
   \item {\bf Derived Types:} Certain components are rarely used and/or take up a large amount of disk-space when stored and can be recomputed from other stored data if needed.
-  It is therefore favorable if these could be recomputed transparently on a as-needed basis as opposed to being stored in-file.
+  It is therefore favorable if these could be recomputed transparently on a as-needed basis as opposed to being stored in-file. A common example would be so called {\em V0s}, these are secondary-vertices\footnote{primary-vertices
+  being vertices generated from a collision at the hearth of the detector and secondary vertices being those formed by the decay of particles} resulting from the decay of a neutral particle. The V0s can be recomputed from the most common data
+  and it is therefore possible to save on storage space by not including them in the AOD files, at the cost of having to recompute them before being able to use them. By leveraging shared memory and smart disk-caching
+  this compute penalty can be kept to a minimum.
   \item {\bf Zero-copy message parsing:} Previous work(CITE,Mikolaj?) has shown that a large performance penalty is incurred by data-serialization. In order to avoid this overhead the
   format should be able to pass data around without any
   (unecessary\footnote{One cannot avoid (de)serialization when passing data between machines with different native data types, such as a big-endian
-   and little-endian machine but that is out-of-scope for the AOD.}) serialization
-  \item {\bf Maintain a similar interface:} The  current ALICE software framework is used by X(CITE) users, contains Y(CITE) lines of code, and was written over the course of
-  Z(CITE) years. While it has been deemed possible, even neccesary, to convert parts of the framework to work with the new format a dramatic change in the way physicists interface
-  with the data would involve to much man-hours in terms of rewritting existing software and utilities and forcing every user to adapt to the new framework.
+   and little-endian machine but that is out-of-scope for the AOD.}) serialization.
+   In practice this means avoiding the use of pointers inside data-structures and keeping any-and-all data of POD-type\footnote{POD, or plain-old-data, is a c++ term defined in (CITE). In practice it means that a struct or class cannot contain any virtual types
+   or define data and/or functions in more than one part of its inheritance graph (including itself).}.
+  \item {\bf Maintain a similar interface:} The  current ALICE software framework is used by X(CITE) users, contains over Y lines of code, and was written over the course of
+  Z years. While it has been deemed possible, even necessary, to convert parts of the framework to work with the new format a dramatic change in the way physicists interface
+  with the data would involve to much man-hours in terms of rewriting existing software and utilities and forcing every user to adapt to the new framework.
   \item {\bf Schema Evolution:} On occasion, changes might be made to the way in which data is stored. This might be the conversion from a single float to a 3-dimensional vector or it might
   be a change in coordinate system to improve accuracy and/or compression. Changes of this kind are called Schema Evolution, and it is important that the framework knows how to handle this so
   that it can adapt and read both old- and new-formatted data.
 \end{itemize}
+In addition to these given requirements the overall guidelines are such that on-disk storage space should be made as small as possible, whereas in-memory data should aim to keep the amount of bandwidth required to a minimum
+as the current ratio of computing power to bandwidth heavily favors compute.
 
 \end{document}
